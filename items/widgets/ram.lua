@@ -4,7 +4,7 @@ local settings = require("settings")
 
 sbar.add("item", "widgets.disk_to_ram_gap", {
     position = "right",
-    width = settings.group_paddings + settings.paddings + 26,
+    width = settings.paddings,
     label = { drawing = false },
     icon = { drawing = false }
 })
