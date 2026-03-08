@@ -1,0 +1,10 @@
+# macOS
+.DS_Store
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
+
+# SketchyBar
+.cache/
