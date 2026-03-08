@@ -34,7 +34,14 @@ for i = 1, max_items, 1 do
 end
 
 sbar.add("bracket", { '/menu\\..*/' }, {
-  background = { color = colors.bg1 }
+  background = {
+    color = colors.glass,
+    border_color = colors.glass_border,
+    border_width = 1,
+    corner_radius = 14,
+    height = 30,
+  },
+  blur_radius = 20,
 })
 
 local menu_padding = sbar.add("item", "menu.padding", {

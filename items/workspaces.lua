@@ -19,11 +19,11 @@ local root = sbar.add("item", {
 		drawing = false,
 	},
 	background = {
-		color = colors.bg0,
+		color = colors.glass,
 		border_width = 1,
 		height = 28,
-		border_color = colors.black,
-		corner_radius = 9,
+		border_color = colors.glass_border,
+		corner_radius = 14,
 		drawing = false,
 	},
 	padding_left = 6,
@@ -184,11 +184,13 @@ sbar.exec(query_workspaces, function(workspaces_and_monitors)
             padding_right = 2,
             padding_left = 2,
             background = {
-                color = colors.bg3,
+                color = colors.glass,
                 border_width = 1,
                 height = 28,
-                border_color = colors.bg2,
+                border_color = colors.glass_border,
+                corner_radius = 14,
             },
+            blur_radius = 20,
             click_script = "aerospace workspace " .. workspace_index,
         })
 

@@ -54,12 +54,12 @@ local remaining_time = sbar.add("item", {
     position = "popup." .. battery_icon.name,
     icon = {
         string = "Time remaining:",
-        width = 30,
+        width = 110,
         align = "left"
     },
     label = {
         string = "??:??h",
-        width = 0,
+        width = 60,
         align = "right"
     },
 })
@@ -136,7 +136,8 @@ sbar.add("bracket", "widgets.battery.bracket", {
     battery_percentage.name,
     battery_time.name
 }, {
-    background = { color = colors.bg1 }
+    background = { color = colors.glass, border_color = colors.glass_border, border_width = 1, corner_radius = 14, height = 30 },
+    blur_radius = 20,
 })
 
 sbar.add("item", "widgets.battery.padding", {

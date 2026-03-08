@@ -2,8 +2,11 @@ local colors = require("colors")
 
 -- Equivalent to the --bar domain
 sbar.bar({
-  height = 40,
+  height = 42,
   color = colors.transparent,
-  padding_right = 2,
-  padding_left = 2,
+  border_color = colors.transparent,
+  blur_radius = 0,
+  y_offset = 6,
+  padding_right = 4,
+  padding_left = 4,
 })

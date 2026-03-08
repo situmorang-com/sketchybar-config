@@ -27,24 +27,24 @@ sbar.default({
   },
   background = {
     height = 28,
-    corner_radius = 9,
-    border_width = 2,
-    border_color = colors.bg2,
+    corner_radius = 14,
+    border_width = 0,
+    color = colors.transparent,
     image = {
-      corner_radius = 9,
-      border_color = colors.grey,
-      border_width = 1
+      corner_radius = 14,
+      border_color = colors.transparent,
+      border_width = 0
     }
   },
   popup = {
     background = {
-      border_width = 2,
-      corner_radius = 9,
+      border_width = 1,
+      corner_radius = 16,
       border_color = colors.popup.border,
       color = colors.popup.bg,
       shadow = { drawing = true },
     },
-    blur_radius = 50,
+    blur_radius = 30,
   },
   padding_left = 5,
   padding_right = 5,
