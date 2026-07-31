@@ -33,7 +33,16 @@ local cpu = sbar.add("graph", "widgets.cpu" , 42, {
 
 cpu:subscribe("cpu_update", function(env)
   -- Also available: env.user_load, env.sys_load
-  local load = tonumber(env.total_load)
+  -- Clamp to 0..100: a negative value here serializes as a leading-dash token
+  -- ("--push widgets.cpu -2935485.43"), which sketchybar parses as a domain.
+  -- That desyncs the message batch and silently drops the --set commands
+  -- batched behind it.
+  local load = tonumber(env.total_load) or 0
+  if load < 0 then
+    load = 0
+  elseif load > 100 then
+    load = 100
+  end
   cpu:push({ load / 100. })
 
   local color = colors.blue

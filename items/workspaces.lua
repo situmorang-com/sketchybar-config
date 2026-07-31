@@ -78,9 +78,10 @@ local function updateWindow(workspace_index, args)
     sbar.animate("tanh", 10, function()
         for i, visible_workspace in ipairs(visible_workspaces) do
             if no_app and workspace_index == visible_workspace["workspace"] then
-                local monitor_id = visible_workspace["monitor-appkit-nsscreen-screens-id"]
+                local raw_id = visible_workspace["monitor-appkit-nsscreen-screens-id"]
+                local monitor_id = raw_id and math.floor(raw_id)
                 icon_line = " —"
-                workspaces[workspace_index]:set({
+                local props = {
                     icon = { drawing = true },
                     label = {
                         string = icon_line,
@@ -92,8 +93,15 @@ local function updateWindow(workspace_index, args)
                     background = { drawing = true },
                     padding_right = 1,
                     padding_left = 1,
-                    display = monitor_id,
-                })
+                }
+                -- Same guard as updateWorkspaceMonitor: right after wake AppKit
+                -- can report a bogus screen id, and a negative/zero display
+                -- value corrupts the message batch. Leave display untouched
+                -- rather than sending garbage.
+                if monitor_id and monitor_id > 0 then
+                    props.display = monitor_id
+                end
+                workspaces[workspace_index]:set(props)
                 return
             end
         end
@@ -142,18 +150,35 @@ local function updateWindows()
     end)
 end
 
-local function updateWorkspaceMonitor()
+local function updateWorkspaceMonitor(retries_left)
+    retries_left = retries_left or 5
     local workspace_monitor = {}
+    local saw_invalid_id = false
     sbar.exec(query_workspaces, function(workspaces_and_monitors)
         for _, entry in ipairs(workspaces_and_monitors) do
             local space_index = entry.workspace
-            local monitor_id = math.floor(entry["monitor-appkit-nsscreen-screens-id"])
-            workspace_monitor[space_index] = monitor_id
+            local raw_id = entry["monitor-appkit-nsscreen-screens-id"]
+            local monitor_id = raw_id and math.floor(raw_id)
+            -- Right after login/wake, AppKit can briefly report a bogus
+            -- screen id before displays finish enumerating; skip those
+            -- rather than handing sketchybar a display domain that doesn't exist.
+            if monitor_id and monitor_id > 0 then
+                workspace_monitor[space_index] = monitor_id
+            else
+                saw_invalid_id = true
+            end
         end
         for workspace_index, _ in pairs(workspaces) do
-            workspaces[workspace_index]:set({
-                display = workspace_monitor[workspace_index],
-            })
+            if workspace_monitor[workspace_index] then
+                workspaces[workspace_index]:set({
+                    display = workspace_monitor[workspace_index],
+                })
+            end
+        end
+        if saw_invalid_id and retries_left > 0 then
+            sbar.delay(1, function()
+                updateWorkspaceMonitor(retries_left - 1)
+            end)
         end
 	end)
 end

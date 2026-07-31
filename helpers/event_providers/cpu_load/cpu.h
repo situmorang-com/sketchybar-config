@@ -1,5 +1,6 @@
 #include <mach/mach.h>
 #include <stdbool.h>
+#include <string.h>
 #include <unistd.h>
 #include <stdio.h>
 
@@ -16,6 +17,11 @@ struct cpu {
 };
 
 static inline void cpu_init(struct cpu* cpu) {
+  // Zero the whole struct first: without this, user/sys/total_load hold
+  // uninitialized stack garbage on the very first cpu_update() (where
+  // has_prev_load is still false), and that garbage gets published as the
+  // first cpu_update event.
+  memset(cpu, 0, sizeof(struct cpu));
   cpu->host = mach_host_self();
   cpu->count = HOST_CPU_LOAD_INFO_COUNT;
   cpu->has_prev_load = false;
