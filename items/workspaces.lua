@@ -3,6 +3,13 @@ local colors = require("colors")
 local settings = require("settings")
 local app_icons = require("helpers.app_icons")
 
+-- Custom events fired by aerospace's exec-on-workspace-change /
+-- on-focus-changed callbacks (see ~/.config/aerospace/aerospace.toml).
+-- Registered here rather than in a standalone shell script so the whole
+-- wiring lives with the item that consumes it.
+sbar.add("event", "aerospace_workspace_change")
+sbar.add("event", "aerospace_focus_change")
+
 local query_workspaces =
 	"aerospace list-workspaces --all --format '%{workspace}%{monitor-appkit-nsscreen-screens-id}' --json"
 
