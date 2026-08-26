@@ -253,6 +253,24 @@ sbar.exec(query_workspaces, function(workspaces_and_monitors)
         updateWindows()
     end)
 
+    -- aerospace's on-focus-changed does not fire when a window is destroyed
+    -- (verified: quitting an app moves focus but emits no callback, and there
+    -- is no on-window-destroyed hook), so the pill would keep showing a ghost
+    -- icon for the dead app. front_app_switched is a sketchybar built-in and
+    -- does fire on quit, since the frontmost app changes.
+    --
+    -- The delayed second pass is required, not belt-and-braces: when the event
+    -- arrives the dying app is still mid-quit and `aerospace list-windows`
+    -- still reports its window, so the immediate pass repaints the same stale
+    -- icon set. Nothing fires again afterwards, so without this the ghost icon
+    -- persists until the next unrelated focus change.
+    root:subscribe("front_app_switched", function()
+        updateWindows()
+        sbar.delay(1, function()
+            updateWindows()
+        end)
+    end)
+
     root:subscribe("display_change", function()
         updateWorkspaceMonitor()
         updateWindows()
