@@ -1,7 +1,24 @@
-#!/usr/bin/env lua
+#!/usr/bin/env -S PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin lua
+
+-- The PATH above is pinned deliberately, and matches the one in
+-- homebrew.mxcl.sketchybar.plist -- so under the LaunchAgent this changes
+-- nothing.
+--
+-- It matters when something *else* starts sketchybar. sketchybar exec()s this
+-- file with whatever environment its own process happened to inherit; anything
+-- launched from a launchd context that does not set PATH (a Karabiner
+-- shell_command, a login item, `open`) gets only /usr/bin:/bin:/usr/sbin:/sbin.
+-- `lua` lives in /opt/homebrew/bin and would not resolve, so this file would
+-- fail to exec -- and sketchybar does not treat that as fatal. It carries on
+-- with an empty bar built from compiled-in defaults, while still holding
+-- /tmp/sketchybar_$USER.lock, which then stops the real LaunchAgent from ever
+-- starting ("could not acquire lock-file... already running?"). The result is a
+-- bar that is simply absent, with nothing explaining why in any sketchybar log.
+--
+-- Pinning it here also fixes the bare command names the config relies on at
+-- runtime (`aerospace` in items/workspaces.lua, `sketchybar` in plugins), which
+-- would otherwise fail the same way.
 
 -- Load the sketchybar-package and prepare the helper binaries
 require("helpers")
 require("init")
-
-
