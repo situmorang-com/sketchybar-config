@@ -251,12 +251,30 @@ sbar.exec(query_workspaces, function(workspaces_and_monitors)
         updateWindows()
     end)
 
-    sbar.exec("aerospace list-workspaces --focused", function(focused_workspace)
-        local focused_workspace = focused_workspace:match("^%s*(.-)%s*$")
-        workspaces[focused_workspace]:set({
-            icon = { highlight = true },
-            label = { highlight = true },
-            background = { border_width = 2 },
-        })
-    end)
+    -- Highlight whichever workspace aerospace reports as focused. On a cold
+    -- boot sketchybar can win the race against aerospace, in which case the
+    -- query yields an empty string (or a name we have no item for) -- indexing
+    -- that blind aborts the callback, so retry instead of erroring out.
+    local function highlightFocusedWorkspace(retries_left)
+        retries_left = retries_left or 5
+        sbar.exec("aerospace list-workspaces --focused", function(focused_workspace)
+            local name = (focused_workspace or ""):match("^%s*(.-)%s*$")
+            local item = workspaces[name]
+            if not item then
+                if retries_left > 0 then
+                    sbar.delay(1, function()
+                        highlightFocusedWorkspace(retries_left - 1)
+                    end)
+                end
+                return
+            end
+            item:set({
+                icon = { highlight = true },
+                label = { highlight = true },
+                background = { border_width = 2 },
+            })
+        end)
+    end
+
+    highlightFocusedWorkspace()
 end)
