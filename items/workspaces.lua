@@ -35,6 +35,9 @@ local root = sbar.add("item", {
 	},
 	padding_left = 6,
 	padding_right = 0,
+	-- Drives the "routine" reconcile below.
+	updates = true,
+	update_freq = 30,
 })
 
 local workspaces = {}
@@ -269,6 +272,17 @@ sbar.exec(query_workspaces, function(workspaces_and_monitors)
         sbar.delay(1, function()
             updateWindows()
         end)
+    end)
+
+    -- Safety net for the one transition nothing else covers: an app quitting
+    -- in a workspace that is neither focused nor frontmost. aerospace has no
+    -- window-destroyed callback, its on-focus-changed does not fire on
+    -- destruction, and front_app_switched does not fire because the frontmost
+    -- app never changed. Verified: the pill kept a ghost icon (drawing=on with
+    -- the dead app's glyph) for over 3 minutes of idle. One pass is ~70ms of
+    -- `aerospace` queries, so 30s is a ~0.2% duty cycle.
+    root:subscribe("routine", function()
+        updateWindows()
     end)
 
     root:subscribe("display_change", function()
