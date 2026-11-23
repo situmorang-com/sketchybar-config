@@ -195,7 +195,7 @@ disk_free:subscribe("routine", function(env)
 
         disk_free:set({
             icon = { color = color },
-            label = available,
+            label = available_kb and string.format("%.0f GB", available_kb / 1024 / 1024) or "?? GB",
         })
 
         disk_details:set({ label = { string = used .. " / " .. total } })
