@@ -1,5 +1,6 @@
 local icons = require("icons")
 local colors = require("colors")
+local popup = require("helpers.popup")
 
 local whitelist = { ["Spotify"] = true,
                     ["Music"] = true    };
@@ -55,22 +56,51 @@ local media_title = sbar.add("item", {
 
 sbar.add("item", {
   position = "popup." .. media_cover.name,
-  icon = { string = icons.media.back },
+  padding_left = 6,
+  padding_right = 6,
+  icon = {
+    string = icons.media.back,
+    color = colors.white,
+    font = { size = 16.0 },
+    padding_left = 10,
+    padding_right = 10,
+  },
   label = { drawing = false },
+  background = { height = 36, color = colors.transparent },
   click_script = "nowplaying-cli previous",
 })
 sbar.add("item", {
   position = "popup." .. media_cover.name,
-  icon = { string = icons.media.play_pause },
+  padding_left = 6,
+  padding_right = 6,
+  icon = {
+    string = icons.media.play_pause,
+    color = colors.white,
+    font = { size = 22.0 },
+    padding_left = 10,
+    padding_right = 10,
+  },
   label = { drawing = false },
+  background = { height = 36, color = colors.transparent },
   click_script = "nowplaying-cli togglePlayPause",
 })
 sbar.add("item", {
   position = "popup." .. media_cover.name,
-  icon = { string = icons.media.forward },
+  padding_left = 6,
+  padding_right = 6,
+  icon = {
+    string = icons.media.forward,
+    color = colors.white,
+    font = { size = 16.0 },
+    padding_left = 10,
+    padding_right = 10,
+  },
   label = { drawing = false },
+  background = { height = 36, color = colors.transparent },
   click_script = "nowplaying-cli next",
 })
+
+local media_card = popup.register(media_cover)
 
 local interrupt = 0
 local function animate_detail(detail)
@@ -95,7 +125,7 @@ media_cover:subscribe("media_change", function(env)
       interrupt = interrupt + 1
       sbar.delay(5, animate_detail)
     else
-      media_cover:set({ popup = { drawing = false } })
+      popup.hide(media_card)
     end
   end
 end)
@@ -109,10 +139,4 @@ media_cover:subscribe("mouse.exited", function(env)
   animate_detail(false)
 end)
 
-media_cover:subscribe("mouse.clicked", function(env)
-  media_cover:set({ popup = { drawing = "toggle" }})
-end)
-
-media_title:subscribe("mouse.exited.global", function(env)
-  media_cover:set({ popup = { drawing = false }})
-end)
+popup.click_to_toggle(media_card, { media_cover })

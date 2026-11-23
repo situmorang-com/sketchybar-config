@@ -2,6 +2,7 @@
 local icons = require("icons")
 local colors = require("colors")
 local settings = require("settings")
+local popup = require("helpers.popup")
 
 sbar.add("item", "widgets.disk_to_ram_gap", {
     position = "right",
@@ -40,19 +41,15 @@ local ram = sbar.add("graph", "widgets.ram", 42, {
     update_freq = 5,
 })
 
-local ram_details = sbar.add("item", {
-    position = "popup." .. ram.name,
-    icon = {
-        string = "Used:",
-        width = 60,
-        align = "left"
-    },
-    label = {
-        string = "??? GB / ??? GB",
-        width = 150,
-        align = "right"
-    },
-})
+local ram_card = popup.register(ram)
+local ram_title = popup.title(ram_card, "widgets.ram.popup.title", "Memory")
+local ram_details = popup.row(ram_card, "widgets.ram.popup.used", "Used", "--", { mono = true })
+local ram_pressure = popup.row(ram_card, "widgets.ram.popup.pressure", "Pressure", "--")
+popup.divider(ram_card, "widgets.ram.popup.divider")
+local ram_top = {}
+for i = 1, 5 do
+    ram_top[i] = popup.row(ram_card, "widgets.ram.popup.top." .. i, "", "", { mono = true, key_width = 150 })
+end
 
 local function apply_usage(usage, used_gb, total_gb)
     local color = colors.green
@@ -72,8 +69,11 @@ local function apply_usage(usage, used_gb, total_gb)
     })
 
     ram_details:set({
-        label = string.format("%.1f GB / %.0f GB", used_gb, total_gb)
+        label = { string = string.format("%.1f / %.0f GB", used_gb, total_gb) }
     })
+    ram_title:set({ label = { string = math.floor(usage) .. "%", color = color } })
+    local level = usage > 85 and "High" or usage > 70 and "Elevated" or "Normal"
+    ram_pressure:set({ label = { string = level, color = color } })
 end
 
 local function read_vm_stat(total_gb)
@@ -102,9 +102,20 @@ ram:subscribe("routine", function(env)
     end)
 end)
 
-ram:subscribe("mouse.clicked", function(env)
-    ram:set({ popup = { drawing = "toggle" } })
-end)
+-- Top memory users, refreshed each time the card opens.
+ram_card.on_open = function()
+    sbar.exec([[ps -Aceo rss=,comm= -m | head -5 | awk '{kb=$1; $1=""; sub(/^ /,""); printf "%s|%.1f GB\n", substr($0,1,22), kb/1048576}']], function(out)
+        local i = 0
+        for line in out:gmatch("[^\n]+") do
+            i = i + 1
+            if i > 5 then break end
+            local name, size = line:match("([^|]*)|(.*)")
+            ram_top[i]:set({ drawing = true, icon = { string = name }, label = { string = size } })
+        end
+        for j = i + 1, 5 do ram_top[j]:set({ drawing = false }) end
+    end)
+end
+popup.click_to_toggle(ram_card, { ram })
 
 sbar.add("bracket", "widgets.ram.bracket", { ram.name }, {
     background = { color = colors.glass, border_color = colors.glass_border, border_width = 1, corner_radius = 14, height = 30 },

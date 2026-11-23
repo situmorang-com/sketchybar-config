@@ -19,9 +19,11 @@ return {
     bg = 0x00000000,            -- Fully transparent for floating islands
     border = 0x00000000,
   },
+  -- macOS-style vibrancy: a thin dark tint over a heavy blur, so the
+  -- desktop colours glow through like Control Centre / menus.
   popup = {
-    bg = 0x5e1c1c2e,            -- ~37% opacity frosted popup
-    border = 0x20ffffff,        -- ~12% opacity white border
+    bg = 0x4a1e1e24,            -- ~29% neutral dark tint (no blue cast)
+    border = 0x2effffff,        -- ~18% white rim, the Mac "glass edge"
   },
   bg1 = 0x2d1c1c2e,             -- Match glass
   bg2 = 0x331c1c2e,             -- Slightly more opaque variant

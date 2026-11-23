@@ -1,6 +1,7 @@
 local icons = require("icons")
 local colors = require("colors")
 local settings = require("settings")
+local popup = require("helpers.popup")
 
 local battery_percentage = sbar.add("item", "widgets.battery.percentage", {
     position = "right",
@@ -50,19 +51,14 @@ local battery_icon = sbar.add("item", "widgets.battery.icon", {
     label = { drawing = false }
 })
 
-local remaining_time = sbar.add("item", {
-    position = "popup." .. battery_icon.name,
-    icon = {
-        string = "Time remaining:",
-        width = 110,
-        align = "left"
-    },
-    label = {
-        string = "??:??h",
-        width = 60,
-        align = "right"
-    },
-})
+-- Card: charge, time left, power source, health. Details refresh on open.
+local battery_card = popup.register(battery_icon)
+local battery_title = popup.title(battery_card, "widgets.battery.popup.title", "Battery")
+local remaining_time = popup.row(battery_card, "widgets.battery.popup.time", "Time remaining", "--")
+local power_source = popup.row(battery_card, "widgets.battery.popup.source", "Power source", "--")
+popup.divider(battery_card, "widgets.battery.popup.divider")
+local battery_health = popup.row(battery_card, "widgets.battery.popup.health", "Maximum capacity", "--")
+local battery_cycles = popup.row(battery_card, "widgets.battery.popup.cycles", "Cycle count", "--")
 
 local last_time_label = "??h"
 
@@ -116,20 +112,23 @@ battery_percentage:subscribe({ "routine", "power_source_change", "system_woke" }
     end)
 end)
 
-battery_percentage:subscribe("mouse.clicked", function()
-    battery_icon:set({ popup = { drawing = "toggle" } })
+battery_card.on_open = function()
     remaining_time:set({ label = { string = last_time_label } })
-end)
-
-battery_time:subscribe("mouse.clicked", function()
-    battery_icon:set({ popup = { drawing = "toggle" } })
-    remaining_time:set({ label = { string = last_time_label } })
-end)
-
-battery_icon:subscribe("mouse.clicked", function()
-    battery_icon:set({ popup = { drawing = "toggle" } })
-    remaining_time:set({ label = { string = last_time_label } })
-end)
+    sbar.exec("pmset -g batt", function(info)
+        local pct = info:match("(%d+)%%") or "--"
+        local source = info:match("Now drawing from '([^']+)'") or "--"
+        local state = info:match("%d+%%; ([%a ]+);") or ""
+        battery_title:set({ label = { string = pct .. "%" .. (state ~= "" and (" · " .. state) or "") } })
+        power_source:set({ label = { string = source } })
+    end)
+    sbar.exec([[ioreg -r -c AppleSmartBattery | tr ',{}' '\n\n\n' | sed -nE 's/^[ |]*"?(CycleCount|NominalChargeCapacity|DesignCapacity)"? *= *([0-9]+).*/\1=\2/p' | sort -u | awk -F= '{v[$1]=$2} END{printf "%s|%s|%s", v["CycleCount"], v["NominalChargeCapacity"], v["DesignCapacity"]}']], function(r)
+        local cycles, maxcap, design = r:match("([^|]*)|([^|]*)|([^|]*)")
+        local m, d = tonumber(maxcap), tonumber(design)
+        battery_health:set({ label = { string = (m and d and d > 0) and (math.floor(m / d * 100 + 0.5) .. "%") or "--" } })
+        battery_cycles:set({ label = { string = (cycles and cycles ~= "") and cycles or "--" } })
+    end)
+end
+popup.click_to_toggle(battery_card, { battery_icon, battery_percentage, battery_time })
 
 sbar.add("bracket", "widgets.battery.bracket", {
     battery_icon.name,

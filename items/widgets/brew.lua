@@ -1,5 +1,6 @@
 local colors = require("colors")
 local settings = require("settings")
+local popup = require("helpers.popup")
 
 local brew_icon = sbar.add("item", "widgets.brew.icon", {
     position = "right",
@@ -45,41 +46,46 @@ local brew_bracket = sbar.add("bracket", "widgets.brew.bracket", {
     popup = { align = "center" },
 })
 
--- Pre-create static popup items (header + 10 package lines)
-local popup_header = sbar.add("item", {
-    position = "popup." .. brew_bracket.name,
-    icon = {
-        string = "Outdated packages:",
-        width = 200,
-        align = "left",
-        font = {
-            family = settings.font.text,
-            style = settings.font.style_map["Bold"],
-            size = 12.0,
-        },
-    },
-    label = { drawing = false },
-})
+-- Card: heading with the count, then up to 10 package lines.
+local brew_card = popup.register(brew_bracket)
+local popup_header = popup.title(brew_card, "widgets.brew.popup.title", "Homebrew")
+popup.divider(brew_card, "widgets.brew.popup.divider")
 
 local max_popup_lines = 10
 local popup_lines = {}
 for i = 1, max_popup_lines do
-    popup_lines[i] = sbar.add("item", {
-        position = "popup." .. brew_bracket.name,
-        drawing = false,
-        icon = {
-            string = "",
-            width = 200,
-            align = "left",
-            font = {
-                family = settings.font.text,
-                style = settings.font.style_map["Regular"],
-                size = 11.0,
-            },
-        },
-        label = { drawing = false },
+    popup_lines[i] = popup.note(brew_card, "widgets.brew.popup.line." .. i, "", {
+        drawing = false, color = colors.white, max_chars = 34,
     })
 end
+-- Action button: "Upgrade all" when something is outdated, otherwise
+-- "Check for updates". Upgrading runs in a Ghostty window so you can watch it.
+local brew_button = sbar.add("item", "widgets.brew.popup.button", {
+    position = "popup." .. brew_bracket.name,
+    width = popup.WIDTH,
+    padding_left = 12,
+    padding_right = 12,
+    icon = { drawing = false },
+    label = {
+        string = "Check for updates",
+        color = colors.white,
+        font = popup.font("text", "Semibold", 12.0),
+        width = popup.WIDTH - 24,
+        align = "center",
+    },
+    background = {
+        height = 28,
+        corner_radius = 9,
+        color = colors.with_alpha(colors.blue, 0.35),
+        border_width = 1,
+        border_color = colors.with_alpha(colors.blue, 0.6),
+    },
+})
+local outdated_count = 0
+
+popup.note(brew_card, "widgets.brew.popup.hint", "Right-click the icon to upgrade too", {
+    align = "center", size = 10.0, color = popup.faint,
+})
 
 -- Use full path to brew and output a simple format
 local brew_script = [[
@@ -91,7 +97,14 @@ local brew_script = [[
     echo "0|brew not found"
     exit 0
   fi
-  OUTDATED=$($BREW outdated --quiet 2>/dev/null)
+  # sketchybar runs commands with SIGCHLD ignored, so children are auto-reaped and
+  # brew's own subprocess calls crash ("undefined method 'exitstatus' for nil").
+  # Restore the default disposition before exec'ing brew.
+  OUTDATED=$(/usr/bin/perl -e '$SIG{CHLD} = "DEFAULT"; exec @ARGV' "$BREW" outdated --quiet 2>/dev/null)
+  if [ $? -ne 0 ]; then
+    echo "?|brew outdated failed"
+    exit 0
+  fi
   if [ -z "$OUTDATED" ]; then
     echo "0|All up to date!"
   else
@@ -110,7 +123,12 @@ local function update_brew()
         end
 
         local count_str = result:match("^([^|]*)")
-        local count = tonumber(count_str) or 0
+        local count = tonumber(count_str)
+        if not count then
+            brew_icon:set({ icon = { color = colors.grey } })
+            brew_count:set({ label = { string = "?", color = colors.grey } })
+            return
+        end
 
         -- Update count label with color
         local color = colors.green
@@ -124,19 +142,21 @@ local function update_brew()
 
         brew_icon:set({ icon = { color = color } })
         brew_count:set({ label = { string = tostring(count), color = color } })
+        outdated_count = count
+        brew_button:set({ label = { string = count > 0 and ("Upgrade all (" .. count .. ")") or "Check for updates" } })
 
         if count == 0 then
             -- Show "all up to date" in first line, hide rest
-            popup_header:set({ icon = { string = "Homebrew status:" } })
+            popup_header:set({ label = { string = "Up to date", color = colors.green } })
             popup_lines[1]:set({
                 drawing = true,
-                icon = { string = "  Everything up to date!", color = colors.green },
+                icon = { string = "Everything is up to date", color = colors.green },
             })
             for i = 2, max_popup_lines do
                 popup_lines[i]:set({ drawing = false })
             end
         else
-            popup_header:set({ icon = { string = "Outdated packages (" .. count .. "):" } })
+            popup_header:set({ label = { string = count .. " outdated", color = color } })
 
             -- Parse comma-separated package list
             local pkg_list = result:match("^[^|]*|([^|]*)")
@@ -155,7 +175,7 @@ local function update_brew()
             for i = 1, display_count do
                 popup_lines[i]:set({
                     drawing = true,
-                    icon = { string = "  " .. packages[i], color = colors.white },
+                    icon = { string = "• " .. packages[i], color = colors.white },
                 })
             end
 
@@ -163,7 +183,7 @@ local function update_brew()
             if count > display_count then
                 popup_lines[display_count + 1]:set({
                     drawing = true,
-                    icon = { string = "  +" .. (count - display_count) .. " more...", color = colors.grey },
+                    icon = { string = "+" .. (count - display_count) .. " more", color = popup.dim },
                 })
                 for i = display_count + 2, max_popup_lines do
                     popup_lines[i]:set({ drawing = false })
@@ -186,21 +206,25 @@ end)
 -- Fetch on first load
 update_brew()
 
-brew_icon:subscribe("mouse.clicked", function(env)
-    if env.BUTTON == "right" then
-        sbar.exec("open -a Terminal 'brew upgrade'")
+local function run_upgrade()
+    popup.hide(brew_card)
+    sbar.exec("open -na Ghostty --args -e $CONFIG_DIR/plugins/brew_upgrade.sh")
+end
+
+popup.click_to_toggle(brew_card, { brew_icon, brew_count }, run_upgrade)
+
+brew_button:subscribe("mouse.clicked", function()
+    if outdated_count > 0 then
+        run_upgrade()
     else
-        brew_bracket:set({ popup = { drawing = "toggle" } })
+        brew_button:set({ label = { string = "Checking…" } })
+        update_brew()
     end
 end)
 
-brew_count:subscribe("mouse.clicked", function(env)
-    if env.BUTTON == "right" then
-        sbar.exec("open -a Terminal 'brew upgrade'")
-    else
-        brew_bracket:set({ popup = { drawing = "toggle" } })
-    end
-end)
+-- Sent by plugins/brew_upgrade.sh when an upgrade finishes.
+sbar.add("event", "brew_refresh")
+brew_icon:subscribe("brew_refresh", function() update_brew() end)
 
 sbar.add("item", "widgets.brew.padding", {
     position = "right",

@@ -1,7 +1,7 @@
 #!/usr/bin/env -S PATH=/opt/homebrew/bin:/opt/homebrew/sbin:/usr/bin:/bin:/usr/sbin:/sbin lua
 
 -- The PATH above is pinned deliberately, and matches the one in
--- homebrew.mxcl.sketchybar.plist -- so under the LaunchAgent this changes
+-- sh.brew.sketchybar.plist -- so under the LaunchAgent this changes
 -- nothing.
 --
 -- It matters when something *else* starts sketchybar. sketchybar exec()s this

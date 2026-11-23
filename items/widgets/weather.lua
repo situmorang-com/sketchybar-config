@@ -1,6 +1,7 @@
 local icons = require("icons")
 local colors = require("colors")
 local settings = require("settings")
+local popup = require("helpers.popup")
 
 -- Weather condition icons (SF Symbols) mapped from WMO weather codes
 local weather_icons = {
@@ -109,181 +110,293 @@ local weather_bracket = sbar.add("bracket", "widgets.weather.bracket", {
     popup = { align = "center" },
 })
 
--- Popup items for weather details
-local popup_location = sbar.add("item", {
-    position = "popup." .. weather_bracket.name,
-    icon = {
-        string = "Location:",
-        width = 80,
-        align = "left",
-    },
-    label = {
-        string = "--",
-        width = 120,
-        align = "right",
-    },
-})
+-- ── Popup card ────────────────────────────────────────────────────────────
+-- Header (big icon + temperature), condition with today's high/low, place,
+-- a hairline, then the detail rows. Opening/closing is handled by
+-- helpers/popup.lua (click outside, app/workspace switch, or click the card).
 
-local popup_condition = sbar.add("item", {
-    position = "popup." .. weather_bracket.name,
-    icon = {
-        string = "Condition:",
-        width = 80,
-        align = "left",
-    },
-    label = {
-        string = "--",
-        width = 120,
-        align = "right",
-    },
-})
+local POPUP_W = popup.WIDTH
+local dim = colors.with_alpha(colors.white, 0.55)
+local faint = colors.with_alpha(colors.white, 0.35)
+local popup_pos = "popup." .. weather_bracket.name
 
-local popup_feels_like = sbar.add("item", {
-    position = "popup." .. weather_bracket.name,
+-- Card look (translucent glass, radius, blur, shadow) comes from the shared
+-- popup style in default.lua / colors.lua.
+
+local function text_font(style, size)
+    return { family = settings.font.text, style = settings.font.style_map[style], size = size }
+end
+
+local function num_font(style, size)
+    return { family = settings.font.numbers, style = settings.font.style_map[style], size = size }
+end
+
+local popup_header = sbar.add("item", "widgets.weather.popup.header", {
+    position = popup_pos,
+    width = POPUP_W,
+    padding_left = 6,
+    padding_right = 6,
+    background = { height = 54 },
     icon = {
-        string = "Feels like:",
-        width = 80,
-        align = "left",
+        string = "􀆮",
+        color = colors.yellow,
+        font = { style = settings.font.style_map["Regular"], size = 34.0 },
+        padding_left = 10,
+        padding_right = 10,
     },
     label = {
         string = "--°",
-        width = 120,
-        align = "right",
+        color = colors.white,
+        font = text_font("Bold", 34.0),
+        padding_left = 0,
     },
 })
 
-local popup_humidity = sbar.add("item", {
-    position = "popup." .. weather_bracket.name,
+local popup_condition = sbar.add("item", "widgets.weather.popup.condition", {
+    position = popup_pos,
+    width = POPUP_W,
+    padding_left = 6,
+    padding_right = 6,
+    background = { height = 20 },
     icon = {
-        string = "Humidity:",
-        width = 80,
+        string = "--",
+        color = colors.white,
+        font = text_font("Semibold", 14.0),
+        width = POPUP_W - 100,
         align = "left",
+        padding_left = 10,
     },
     label = {
-        string = "--%",
-        width = 120,
+        string = "",
+        color = dim,
+        font = num_font("Semibold", 12.0),
+        width = 100 - 12,
         align = "right",
+        padding_right = 10,
     },
 })
 
-local popup_wind = sbar.add("item", {
-    position = "popup." .. weather_bracket.name,
+local popup_place = sbar.add("item", "widgets.weather.popup.place", {
+    position = popup_pos,
+    width = POPUP_W,
+    padding_left = 6,
+    padding_right = 6,
+    background = { height = 20 },
     icon = {
-        string = "Wind:",
-        width = 80,
+        string = "--",
+        color = dim,
+        font = text_font("Regular", 12.0),
+        width = POPUP_W - 70,
         align = "left",
+        padding_left = 10,
     },
     label = {
-        string = "-- km/h",
-        width = 120,
+        string = "",
+        font = text_font("Bold", 9.0),
+        width = 70 - 12,
         align = "right",
+        padding_right = 10,
     },
 })
 
-local function fetch_weather()
-    sbar.exec("$CONFIG_DIR/plugins/weather.sh", function(result)
-        if not result or result:match("^ERROR") or result:match("^%s*$") then
-            weather_temp:set({ label = { string = "N/A" } })
-            return
-        end
+sbar.add("item", "widgets.weather.popup.divider", {
+    position = popup_pos,
+    width = POPUP_W,
+    padding_left = 16,
+    padding_right = 16,
+    icon = { drawing = false },
+    label = { drawing = false },
+    background = {
+        height = 1,
+        color = colors.with_alpha(colors.white, 0.12),
+        y_offset = -2,
+    },
+})
 
-        -- Parse pipe-delimited result: temp|feels|humid|wind|code|city
-        local temp, feels_like, humidity, wind, code, city = result:match("([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)")
-
-        if not temp or temp == "" then
-            weather_temp:set({ label = { string = "N/A" } })
-            return
-        end
-
-        local weather_code = tonumber(code) or 0
-        local icon = weather_icons[weather_code] or "􀆮"
-        local description = weather_descriptions[weather_code] or "Unknown"
-
-        -- Color temperature based on value
-        local temp_num = tonumber(temp) or 0
-        local temp_color = colors.white
-        if temp_num >= 35 then
-            temp_color = colors.red
-        elseif temp_num >= 28 then
-            temp_color = colors.orange
-        elseif temp_num >= 20 then
-            temp_color = colors.yellow
-        elseif temp_num >= 10 then
-            temp_color = colors.green
-        elseif temp_num >= 0 then
-            temp_color = colors.blue
-        else
-            temp_color = colors.magenta
-        end
-
-        -- Round temperature
-        local temp_rounded = math.floor(tonumber(temp) + 0.5)
-
-        weather_icon:set({
-            icon = { string = icon, color = temp_color },
-        })
-        weather_temp:set({
-            label = { string = temp_rounded .. "°", color = temp_color },
-        })
-
-        -- Update popup details
-        local city_name = city and city:match("^%s*(.-)%s*$") or "Unknown"
-        if city_name == "" then city_name = "Unknown" end
-        popup_location:set({ label = { string = city_name } })
-        popup_condition:set({ label = { string = description } })
-        popup_feels_like:set({ label = { string = math.floor(tonumber(feels_like or 0) + 0.5) .. "°C" } })
-        popup_humidity:set({ label = { string = (humidity or "--") .. "%" } })
-        popup_wind:set({ label = { string = (wind or "--") .. " km/h" } })
-    end)
+local function detail_row(key, title)
+    return sbar.add("item", "widgets.weather.popup." .. key, {
+        position = popup_pos,
+        width = POPUP_W,
+        padding_left = 6,
+        padding_right = 6,
+        background = { height = 22 },
+        icon = {
+            string = title,
+            color = dim,
+            font = text_font("Regular", 12.0),
+            width = POPUP_W / 2,
+            align = "left",
+            padding_left = 10,
+        },
+        label = {
+            string = "--",
+            color = colors.white,
+            font = num_font("Semibold", 12.0),
+            width = POPUP_W / 2 - 12,
+            align = "right",
+            padding_right = 10,
+        },
+    })
 end
 
-weather_icon:subscribe("routine", function()
-    fetch_weather()
-end)
+local popup_feels_like = detail_row("feels", "Feels like")
+local popup_humidity = detail_row("humidity", "Humidity")
+local popup_rain = detail_row("rain", "Chance of rain")
+local popup_wind = detail_row("wind", "Wind")
+local popup_pm25 = detail_row("pm25", "PM2.5")
+popup_pm25:set({ icon = { width = 60 }, label = { width = POPUP_W - 60 - 12 } })
 
--- On wake, delay the fetch so it doesn't pile on with other wake handlers
-weather_icon:subscribe("system_woke", function()
-    sbar.exec("(sleep 10 && $CONFIG_DIR/plugins/weather.sh) &", function(result)
-        if result and not result:match("^ERROR") and not result:match("^%s*$") then
-            -- Re-parse and update (same logic as fetch_weather callback)
-            local temp, feels_like, humidity, wind, code, city = result:match("([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)|([^|]*)")
-            if temp and temp ~= "" then
-                local weather_code = tonumber(code) or 0
-                local icon = weather_icons[weather_code] or "􀆮"
-                local description = weather_descriptions[weather_code] or "Unknown"
-                local temp_num = tonumber(temp) or 0
-                local temp_color = colors.white
-                if temp_num >= 35 then temp_color = colors.red
-                elseif temp_num >= 28 then temp_color = colors.orange
-                elseif temp_num >= 20 then temp_color = colors.yellow
-                elseif temp_num >= 10 then temp_color = colors.green
-                elseif temp_num >= 0 then temp_color = colors.blue
-                else temp_color = colors.magenta end
-                local temp_rounded = math.floor(tonumber(temp) + 0.5)
-                weather_icon:set({ icon = { string = icon, color = temp_color } })
-                weather_temp:set({ label = { string = temp_rounded .. "°", color = temp_color } })
-                local city_name = city and city:match("^%s*(.-)%s*$") or "Unknown"
-                if city_name == "" then city_name = "Unknown" end
-                popup_location:set({ label = { string = city_name } })
-                popup_condition:set({ label = { string = description } })
-                popup_feels_like:set({ label = { string = math.floor(tonumber(feels_like or 0) + 0.5) .. "°C" } })
-                popup_humidity:set({ label = { string = (humidity or "--") .. "%" } })
-                popup_wind:set({ label = { string = (wind or "--") .. " km/h" } })
-            end
-        end
-    end)
-end)
+local popup_footer = sbar.add("item", "widgets.weather.popup.footer", {
+    position = popup_pos,
+    width = POPUP_W,
+    padding_left = 6,
+    padding_right = 6,
+    background = { height = 22 },
+    icon = {
+        string = "",
+        color = faint,
+        font = text_font("Regular", 10.0),
+        width = POPUP_W - 12,
+        align = "center",
+    },
+    label = { drawing = false },
+})
 
--- Also fetch on first load
+local popup_items = {
+    popup_header, popup_condition, popup_place, popup_feels_like,
+    popup_humidity, popup_rain, popup_wind, popup_pm25, popup_footer,
+}
+
+local function temp_color_for(t)
+    if t >= 35 then return colors.red
+    elseif t >= 28 then return colors.orange
+    elseif t >= 20 then return colors.yellow
+    elseif t >= 10 then return colors.green
+    elseif t >= 0 then return colors.blue
+    end
+    return colors.magenta
+end
+
+local function round(x)
+    local n = tonumber(x)
+    if not n then return nil end
+    return math.floor(n + 0.5)
+end
+
+-- US AQI bands (falls back to PM2.5 µg/m³ breakpoints if AQI is missing).
+local function aqi_level(aqi, pm)
+    local v = aqi
+    if not v and pm then
+        v = pm <= 9 and 0 or pm <= 35.4 and 51 or pm <= 55.4 and 101
+            or pm <= 125.4 and 151 or pm <= 225.4 and 201 or 301
+    end
+    v = v or 0
+    if v <= 50 then return { text = "Good", color = colors.green }
+    elseif v <= 100 then return { text = "Moderate", color = colors.yellow }
+    elseif v <= 150 then return { text = "Sensitive", color = colors.orange }
+    elseif v <= 200 then return { text = "Unhealthy", color = colors.red }
+    elseif v <= 300 then return { text = "Very unhealthy", color = colors.magenta }
+    end
+    return { text = "Hazardous", color = 0xffb0303f }
+end
+
+local source_badge = {
+    gps = { text = "● GPS", color = colors.green },
+    fixed = { text = "● FIXED", color = colors.blue },
+    ip = { text = "● IP · APPROX", color = colors.orange },
+}
+
+local fetch_weather
+local retries = 0
+
+-- A failed fetch (network not back after wake, VPN reconnecting) would
+-- otherwise leave N/A up until the next 30-minute refresh.
+local function fail()
+    weather_temp:set({ label = { string = "N/A" } })
+    if retries < 5 then
+        retries = retries + 1
+        fetch_weather(30 * retries)
+    end
+end
+
+local function apply_weather(result)
+    if not result or result:match("^ERROR") or result:match("^%s*$") then
+        fail()
+        return
+    end
+
+    -- temp|feels|humid|wind|code|place|max|min|rain|source|pm25|aqi
+    local f = {}
+    for field in (result:gsub("%s+$", "") .. "|"):gmatch("([^|]*)|") do
+        f[#f + 1] = field
+    end
+    local temp, feels, humid, wind, code, place, tmax, tmin, rain, source, pm25, aqi =
+        table.unpack(f, 1, 12)
+
+    if not tonumber(temp) then
+        fail()
+        return
+    end
+    retries = 0
+
+    local weather_code = tonumber(code) or 0
+    local icon = weather_icons[weather_code] or "􀆮"
+    local description = weather_descriptions[weather_code] or "Unknown"
+    local t = round(temp)
+    local color = temp_color_for(t)
+
+    weather_icon:set({ icon = { string = icon, color = color } })
+    weather_temp:set({ label = { string = t .. "°", color = color } })
+
+    local hi, lo = round(tmax), round(tmin)
+    local badge = source_badge[source] or source_badge.ip
+    if place == nil or place == "" then place = "Unknown" end
+
+    popup_header:set({ icon = { string = icon, color = color }, label = { string = t .. "°" } })
+    popup_condition:set({
+        icon = { string = description },
+        label = { string = (hi and lo) and ("H " .. hi .. "°  L " .. lo .. "°") or "" },
+    })
+    popup_place:set({
+        icon = { string = place },
+        label = { string = badge.text, color = badge.color },
+    })
+    popup_feels_like:set({ label = { string = (round(feels) or "--") .. "°" } })
+    popup_humidity:set({ label = { string = (humid ~= "" and humid or "--") .. "%" } })
+    popup_rain:set({ label = { string = (rain ~= "" and rain or "--") .. "%" } })
+    popup_wind:set({ label = { string = (round(wind) or "--") .. " km/h" } })
+    local pm = round(pm25)
+    if pm then
+        local level = aqi_level(tonumber(aqi), tonumber(pm25))
+        popup_pm25:set({
+            drawing = true,
+            label = { string = pm .. " µg/m³ · " .. level.text, color = level.color },
+        })
+    else
+        popup_pm25:set({ drawing = false })
+    end
+    popup_footer:set({ icon = { string = "Updated " .. os.date("%H:%M") } })
+end
+
+function fetch_weather(delay)
+    local cmd = "$CONFIG_DIR/plugins/weather.sh"
+    if delay then cmd = "sleep " .. delay .. "; " .. cmd end
+    sbar.exec(cmd, apply_weather)
+end
+
+weather_icon:subscribe({ "routine", "forced" }, function() fetch_weather() end)
+
+-- On wake, delay the fetch so it doesn't pile on with other wake handlers.
+weather_icon:subscribe("system_woke", function() fetch_weather(10) end)
+
 fetch_weather()
 
-weather_icon:subscribe("mouse.clicked", function()
-    weather_bracket:set({ popup = { drawing = "toggle" } })
-end)
-
-weather_temp:subscribe("mouse.clicked", function()
-    weather_bracket:set({ popup = { drawing = "toggle" } })
-end)
+local card = popup.register(weather_bracket)
+popup.click_to_toggle(card, { weather_icon, weather_temp })
+-- Clicking the card itself closes it too.
+for _, item in ipairs(popup_items) do
+    item:subscribe("mouse.clicked", function() popup.hide(card) end)
+end
 
 sbar.add("item", "widgets.weather.padding", {
     position = "right",

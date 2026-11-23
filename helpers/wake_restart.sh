@@ -19,7 +19,7 @@ set -u
 
 GUARD_SECONDS=60
 GUARD_FILE="${TMPDIR:-/tmp}/sketchybar_wake_restart.stamp"
-SERVICE="gui/$(id -u)/homebrew.mxcl.sketchybar"
+SERVICE="gui/$(id -u)/sh.brew.sketchybar"
 
 # Let the display topology settle before restarting.
 sleep 3
