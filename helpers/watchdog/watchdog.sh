@@ -20,8 +20,13 @@ set -u
 
 INTERVAL=5          # seconds between probes
 PROBE_TIMEOUT=3     # seconds a single --query may take
-FAILS_TO_RESTART=2  # consecutive silent probes before restarting (~10s)
-STARTUP_GRACE=30    # seconds to leave a newly started process alone
+FAILS_TO_RESTART=3  # consecutive silent probes before restarting (~15s)
+STARTUP_GRACE=90    # seconds to leave a newly started process alone
+# Starting up, the bar answers queries at first, then goes silent for 15-20s
+# while it draws its windows. That takes 5s in all on an idle Mac but over 40s on
+# a busy one, and a 30s grace with 2 probes killed every new bar before it was up
+# (2026-11-27 16:18-16:29, another app holding the CPU: a restart every 30-60s).
+# sleep_guard already starts a fresh bar on wake, so a later backstop costs little.
 
 SB=/opt/homebrew/bin/sketchybar
 SERVICE="gui/$(id -u)/sh.brew.sketchybar"

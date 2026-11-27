@@ -4,12 +4,25 @@ sbar = require("sketchybar")
 -- Set the bar name, if you are using another bar instance than sketchybar
 -- sbar.set_bar_name("bottom_bar")
 
+-- While the config loads, sbar.animate just applies its changes. SbarLua ends
+-- the open transaction when an animate block returns, which also ends
+-- begin_config: weather.lua draws its saved reading at load, and from there on
+-- every add and set was its own round trip to the bar (~10-25s instead of under
+-- a second; measured 2026-11-27). There is nothing on screen to animate yet.
+local animate = sbar.animate
+local loading = true
+sbar.animate = function(curve, duration, fn)
+  if loading then return fn() end
+  return animate(curve, duration, fn)
+end
+
 -- Bundle the entire initial configuration into a single message to sketchybar
 sbar.begin_config()
 require("bar")
 require("default")
 require("items")
 sbar.end_config()
+loading = false
 require("helpers.log").write("sketchybar", "config loaded")
 
 -- Workaround for an upstream sketchybar bug (v2.24.0): after the display
