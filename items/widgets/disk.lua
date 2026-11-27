@@ -158,7 +158,7 @@ disk_free:subscribe("disk_scan_done", function()
     if popup.is_open(disk_card) then refresh_rows() end
 end)
 
-disk_free:subscribe("routine", function(env)
+disk_free:subscribe({ "routine", "forced", "system_woke" }, function(env)
     -- The Data volume reflects user-available storage on modern macOS/APFS.
     sbar.exec("df -k /System/Volumes/Data | awk 'NR==2 {print $5, $4, $3, $2}' | sed 's/%//'", function(result)
         local parts = {}

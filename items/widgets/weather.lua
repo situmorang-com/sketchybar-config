@@ -306,23 +306,16 @@ local source_badge = {
     ip = { text = "● IP · APPROX", color = colors.orange },
 }
 
+local log = require("helpers.log")
 local fetch_weather
 local retries = 0
+local last_good = nil -- { result = <script output>, at = <epoch> }
+local STALE = colors.with_alpha(colors.white, 0.45)
 
--- A failed fetch (network not back after wake, VPN reconnecting) would
--- otherwise leave N/A up until the next 30-minute refresh.
-local function fail()
-    weather_temp:set({ label = { string = "N/A" } })
-    if retries < 5 then
-        retries = retries + 1
-        fetch_weather(30 * retries)
-    end
-end
-
-local function apply_weather(result)
-    if not result or result:match("^ERROR") or result:match("^%s*$") then
-        fail()
-        return
+-- Draws one weather.sh result. Returns false if the result is unusable.
+local function render(result, fetched_at)
+    if type(result) ~= "string" or result:match("^ERROR") or result:match("^%s*$") then
+        return false
     end
 
     -- temp|feels|humid|wind|code|place|max|min|rain|source|pm25|aqi
@@ -334,10 +327,8 @@ local function apply_weather(result)
         table.unpack(f, 1, 12)
 
     if not tonumber(temp) then
-        fail()
-        return
+        return false
     end
-    retries = 0
 
     local weather_code = tonumber(code) or 0
     local icon = weather_icons[weather_code] or "􀆮"
@@ -345,8 +336,10 @@ local function apply_weather(result)
     local t = round(temp)
     local color = temp_color_for(t)
 
-    weather_icon:set({ icon = { string = icon, color = color } })
-    weather_temp:set({ label = { string = t .. "°", color = color } })
+    sbar.animate("tanh", 15, function()
+        weather_icon:set({ icon = { string = icon, color = color } })
+        weather_temp:set({ label = { string = t .. "°", color = color } })
+    end)
 
     local hi, lo = round(tmax), round(tmin)
     local badge = source_badge[source] or source_badge.ip
@@ -375,13 +368,43 @@ local function apply_weather(result)
     else
         popup_pm25:set({ drawing = false })
     end
-    popup_footer:set({ icon = { string = "Updated " .. os.date("%H:%M") } })
+    popup_footer:set({ icon = { string = "Updated " .. os.date("%H:%M", fetched_at) } })
+    return true
+end
+
+-- A failed fetch (network not back after wake, VPN reconnecting) keeps the last
+-- good reading on screen, dimmed, and retries with backoff; N/A only appears
+-- when there has never been a reading.
+local function on_result(result, exit_code)
+    local now = os.time()
+    if render(result, now) then
+        retries = 0
+        last_good = { result = result, at = now }
+        log.save_state("weather.last", now .. "\n" .. result)
+        return
+    end
+
+    log.write("weather", "fetch failed (exit " .. tostring(exit_code) .. "): "
+        .. (type(result) == "string" and result:sub(1, 80) or "no output"))
+    if last_good then
+        sbar.animate("tanh", 15, function()
+            weather_icon:set({ icon = { color = STALE } })
+            weather_temp:set({ label = { color = STALE } })
+        end)
+        popup_footer:set({ icon = { string = "Updated " .. os.date("%H:%M", last_good.at) .. " · offline, retrying" } })
+    else
+        weather_temp:set({ label = { string = "N/A" } })
+    end
+    if retries < 5 then
+        retries = retries + 1
+        fetch_weather(30 * retries)
+    end
 end
 
 function fetch_weather(delay)
     local cmd = "$CONFIG_DIR/plugins/weather.sh"
     if delay then cmd = "sleep " .. delay .. "; " .. cmd end
-    sbar.exec(cmd, apply_weather)
+    sbar.exec(cmd, on_result)
 end
 
 weather_icon:subscribe({ "routine", "forced" }, function() fetch_weather() end)
@@ -389,6 +412,20 @@ weather_icon:subscribe({ "routine", "forced" }, function() fetch_weather() end)
 -- On wake, delay the fetch so it doesn't pile on with other wake handlers.
 weather_icon:subscribe("system_woke", function() fetch_weather(10) end)
 
+-- Show the last reading from before the restart straight away (dimmed if it is
+-- over an hour old), then fetch a fresh one.
+do
+    local saved = log.load_state("weather.last")
+    local at, result = (saved or ""):match("^(%d+)\n(.*)$")
+    at = tonumber(at)
+    if at and os.time() - at < 6 * 3600 and render(result, at) then
+        last_good = { result = result, at = at }
+        if os.time() - at > 3600 then
+            weather_icon:set({ icon = { color = STALE } })
+            weather_temp:set({ label = { color = STALE } })
+        end
+    end
+end
 fetch_weather()
 
 local card = popup.register(weather_bracket)

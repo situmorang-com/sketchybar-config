@@ -94,8 +94,10 @@ battery_percentage:subscribe({ "routine", "power_source_change", "system_woke" }
             end
         end
 
-        battery_icon:set({ icon = { string = icon, color = color } })
-        battery_percentage:set({ label = { string = label } })
+        sbar.animate("tanh", 15, function()
+            battery_icon:set({ icon = { string = icon, color = color } })
+            battery_percentage:set({ label = { string = label } })
+        end)
 
         local time_label = "--"
         local remaining = batt_info:match("(%d+:%d+)%s+remaining")

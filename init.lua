@@ -10,6 +10,7 @@ require("bar")
 require("default")
 require("items")
 sbar.end_config()
+require("helpers.log").write("sketchybar", "config loaded")
 
 -- Workaround for an upstream sketchybar bug (v2.24.0): after the display
 -- topology changes across sleep (closing the lid drops the built-in display),

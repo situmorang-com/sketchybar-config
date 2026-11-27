@@ -22,3 +22,7 @@ sbar.bar({
 -- The PR #892 build lets the native menu bar slide in at the top edge, so the
 -- menubar_hotcorner helper (needed with the old always-above patch, kept in
 -- patches/disabled/) isn't started any more.
+
+-- Pushes mic, network and display/notch changes as events (mic_update,
+-- vpn_update, notch_update) so widgets don't poll for them.
+sbar.exec("killall sysevents >/dev/null; $CONFIG_DIR/helpers/sysevents/bin/sysevents")

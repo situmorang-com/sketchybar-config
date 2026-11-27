@@ -38,7 +38,6 @@ local ram = sbar.add("graph", "widgets.ram", 42, {
     },
     padding_right = settings.paddings + 6,
     popup = { align = "center" },
-    update_freq = 5,
 })
 
 local ram_card = popup.register(ram)
@@ -62,11 +61,13 @@ local function apply_usage(usage, used_gb, total_gb)
     end
 
     ram:push({ usage / 100 })
-    ram:set({
-        graph = { color = color },
-        icon = { color = color },
-        label = "ram " .. math.floor(usage) .. "%",
-    })
+    sbar.animate("tanh", 15, function()
+        ram:set({
+            graph = { color = color },
+            icon = { color = color },
+            label = "ram " .. math.floor(usage) .. "%",
+        })
+    end)
 
     ram_details:set({
         label = { string = string.format("%.1f / %.0f GB", used_gb, total_gb) }
@@ -76,30 +77,14 @@ local function apply_usage(usage, used_gb, total_gb)
     ram_pressure:set({ label = { string = level, color = color } })
 end
 
-local function read_vm_stat(total_gb)
-    sbar.exec([[vm_stat | grep 'Pages active\|Pages wired' | awk '{sum += $3} END {print sum * 16384 / 1024 / 1024 / 1024}']],
-        function(used_gb_str)
-            local used_gb = tonumber(used_gb_str) or 0
-            local usage_pct = total_gb > 0 and (used_gb / total_gb) * 100 or 0
-            apply_usage(usage_pct, used_gb, total_gb)
-        end)
-end
-
-ram:subscribe("routine", function(env)
-    sbar.exec("sysctl -n hw.memsize | awk '{print $1 / 1024 / 1024 / 1024}'", function(total_gb_str)
-        local total_gb = tonumber(total_gb_str) or 0
-
-        sbar.exec([[memory_pressure | grep 'System-wide memory free percentage:' | awk '{print 100-$5}' | sed 's/%//']],
-            function(result)
-                local usage = tonumber(result)
-                if usage then
-                    local used_gb = (usage / 100) * total_gb
-                    apply_usage(usage, used_gb, total_gb)
-                else
-                    read_vm_stat(total_gb)
-                end
-            end)
-    end)
+-- The cpu_load helper reads memory in the same pass as the CPU (via
+-- kern.memorystatus_level, the number `memory_pressure` prints), so this rides
+-- on its cpu_update event instead of spawning three processes every 5 seconds.
+ram:subscribe("cpu_update", function(env)
+    local usage = tonumber(env.mem_used)
+    local total_gb = tonumber(env.mem_total_gb) or 0
+    if not usage or usage < 0 then return end
+    apply_usage(usage, usage / 100 * total_gb, total_gb)
 end)
 
 -- Top memory users, refreshed each time the card opens.
@@ -115,7 +100,13 @@ ram_card.on_open = function()
         for j = i + 1, 5 do ram_top[j]:set({ drawing = false }) end
     end)
 end
-popup.click_to_toggle(ram_card, { ram })
+popup.note(ram_card, "widgets.ram.popup.hint", "Right-click for Activity Monitor", {
+    align = "center", size = 10.0, color = popup.faint,
+})
+-- Left-click: the card. Right-click: Activity Monitor.
+popup.click_to_toggle(ram_card, { ram }, function()
+    sbar.exec("open -a 'Activity Monitor'")
+end)
 
 sbar.add("bracket", "widgets.ram.bracket", { ram.name }, {
     background = { color = colors.glass, border_color = colors.glass_border, border_width = 1, corner_radius = 14, height = 30 },

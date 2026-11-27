@@ -20,7 +20,9 @@ local vpn = sbar.add("item", "widgets.vpn", {
     },
 
     padding_right = settings.paddings + 6,
-    update_freq = 5,
+    -- helpers/sysevents sends vpn_update whenever the network configuration
+    -- changes (a tunnel coming up or down), so this is only a fallback.
+    update_freq = 120,
 })
 
 sbar.add("event", "vpn_update")
@@ -33,14 +35,19 @@ local state_colors = {
     off = colors.grey,
 }
 
+local log = require("helpers.log")
+
 local function update_vpn()
-    sbar.exec("$CONFIG_DIR/helpers/vpn_status.sh", function(result)
-        local state, name = (result or ""):match("^(%a+)|([^\n]*)")
+    log.exec("vpn", "$CONFIG_DIR/helpers/vpn_status.sh", function(result)
+        local state, name = (type(result) == "string" and result or ""):match("^(%a+)|([^\n]*)")
+        if not state then return end -- keep the last state rather than guess
         state = state_colors[state] and state or "off"
-        vpn:set({
-            icon = { color = state_colors[state], drawing = true },
-            label = { string = name or "", drawing = state ~= "off" },
-        })
+        sbar.animate("tanh", 10, function()
+            vpn:set({
+                icon = { color = state_colors[state], drawing = true },
+                label = { string = name or "", drawing = state ~= "off" },
+            })
+        end)
     end)
 end
 
