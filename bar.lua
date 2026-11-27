@@ -7,21 +7,18 @@ sbar.bar({
   border_color = colors.transparent,
   blur_radius = 0,
   y_offset = 2,
-  -- macOS 27 keeps an invisible full-width 44pt MenuBarAgent window across the
-  -- top of the screen even while the menu bar is auto-hidden, and it swallows
-  -- every click on anything underneath it (FelixKratz/SketchyBar#852). With
-  -- topmost off the bar sits under it and no item click ever fires. Stock
-  -- sketchybar's "on" uses the same window level as that agent (25), and on
-  -- macOS 27.2 the agent recreates its window in front within seconds of every
-  -- bar rebuild, so "on" alone doesn't hold either. The installed binary is
-  -- built with patches/menubar-agent-level.patch, which puts "on" one level
-  -- higher; see patches/README.md for how to rebuild it after a brew upgrade.
-  topmost = "on",
+  -- macOS 27 keeps an invisible MenuBarAgent window over the menu-bar strip
+  -- while the menu bar is auto-hidden, and it swallows clicks on anything
+  -- underneath (FelixKratz/SketchyBar#852). The installed binary is built with
+  -- patches/pr892-menubar-reveal.patch (FelixKratz/SketchyBar#892), which lifts
+  -- the bar above that window while the menu bar is hidden and drops it back
+  -- when macOS reveals the menu bar, so it wants topmost off. See
+  -- patches/README.md for how to rebuild it after a brew upgrade.
+  topmost = "off",
   padding_right = 4,
   padding_left = 4,
 })
 
--- Being above the agent also means the native menu bar can never slide in.
--- Park the pointer in the top-right corner to get it: this watcher drops and
--- hides the bar while the pointer stays in the menu-bar band or a menu is open.
-sbar.exec("killall menubar_hotcorner >/dev/null; $CONFIG_DIR/helpers/menubar_hotcorner/bin/menubar_hotcorner")
+-- The PR #892 build lets the native menu bar slide in at the top edge, so the
+-- menubar_hotcorner helper (needed with the old always-above patch, kept in
+-- patches/disabled/) isn't started any more.

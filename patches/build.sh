@@ -44,12 +44,16 @@ make -C "$src" arm64 >/dev/null
 # Keep the stock binary once, so the patch can be undone without a reinstall.
 # brew installs it read-only, so replace the file rather than writing into it.
 [[ -f "$cellar/sketchybar.orig" ]] || cp "$cellar/sketchybar" "$cellar/sketchybar.orig"
-install -m 555 "$src/bin/sketchybar" "$cellar/sketchybar"
-
 # Sign with the local certificate so the binary keeps one code identity across
 # rebuilds; the Accessibility approval in System Settings is tied to it.
+# Sign a copy and rename it over the old binary: the kernel caches a binary's
+# signature per file, so rewriting the installed file in place gets the new
+# process killed at launch with OS_REASON_CODESIGNING.
 "$here/make-signing-cert.sh" sketchybar-local
-codesign --force --sign sketchybar-local --identifier sketchybar "$cellar/sketchybar"
+install -m 755 "$src/bin/sketchybar" "$cellar/sketchybar.new"
+codesign --force --sign sketchybar-local --identifier sketchybar "$cellar/sketchybar.new"
+chmod 555 "$cellar/sketchybar.new"
+mv -f "$cellar/sketchybar.new" "$cellar/sketchybar"
 
 # kickstart only works while the service is loaded; after a `launchctl bootout`
 # it has to be bootstrapped from the plist again.
